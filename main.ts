@@ -179,10 +179,11 @@ namespace TFT {
     function writeColor(color: number) {
         pins.digitalWritePin(DC_PIN, 1)
         pins.digitalWritePin(CS_PIN, 0)
-
-        pins.spiWrite(color >> 8)
+    
+        // FIX RGB565 byte order
         pins.spiWrite(color & 0xFF)
-
+        pins.spiWrite(color >> 8)
+    
         pins.digitalWritePin(CS_PIN, 1)
     }
 
