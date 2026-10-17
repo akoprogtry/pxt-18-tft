@@ -1,5 +1,4 @@
-// FINAL stable TFT library for Wukong + ST7735 (TK89)
-// Clean, fast, and tested architecture
+// TFT driver for micro:bit + Wukong + Lonely Binary TK89 (ST7735S).
 
 //% weight=100 color=#0fbc11 icon="\uf26c"
 namespace TFT {
@@ -19,12 +18,27 @@ namespace TFT {
     enum CMD {
         SWRESET = 0x01,
         SLPOUT = 0x11,
+        NORON = 0x13,
+        INVOFF = 0x20,
+        INVON = 0x21,
         DISPON = 0x29,
         CASET = 0x2A,
         RASET = 0x2B,
         RAMWR = 0x2C,
         MADCTL = 0x36,
-        COLMOD = 0x3A
+        COLMOD = 0x3A,
+        FRMCTR1 = 0xB1,
+        FRMCTR2 = 0xB2,
+        FRMCTR3 = 0xB3,
+        INVCTR = 0xB4,
+        PWCTR1 = 0xC0,
+        PWCTR2 = 0xC1,
+        PWCTR3 = 0xC2,
+        PWCTR4 = 0xC3,
+        PWCTR5 = 0xC4,
+        VMCTR1 = 0xC5,
+        GMCTRP1 = 0xE0,
+        GMCTRN1 = 0xE1
     }
 
     export enum Color {
@@ -38,12 +52,18 @@ namespace TFT {
         Magenta = 0xF81F
     }
 
-    //% block="init TFT"
-    export function init(): void {
+    //% block="init TFT inverted %inverted BGR %bgr"
+    //% inverted.defl=true bgr.defl=false
+    export function init(inverted: boolean = true, bgr: boolean = false): void {
+        pins.digitalWritePin(CS_PIN, 1)
+        pins.digitalWritePin(DC_PIN, 1)
+        pins.spiPins(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13)
         pins.spiFrequency(4000000)
         pins.spiFormat(8, 0)
 
         // reset
+        pins.digitalWritePin(RST_PIN, 1)
+        basic.pause(20)
         pins.digitalWritePin(RST_PIN, 0)
         basic.pause(20)
         pins.digitalWritePin(RST_PIN, 1)
@@ -52,13 +72,28 @@ namespace TFT {
         send(CMD.SWRESET)
         basic.pause(150)
         send(CMD.SLPOUT)
-        basic.pause(150)
+        basic.pause(500)
 
-        sendData(CMD.COLMOD, [0x05]) // 16bit
-        sendData(CMD.MADCTL, [0xA0]) // change if colors wrong
+        // Restore the frame, power and gamma setup used by the original driver.
+        sendData(CMD.FRMCTR1, [0x01, 0x2C, 0x2D])
+        sendData(CMD.FRMCTR2, [0x01, 0x2C, 0x2D])
+        sendData(CMD.FRMCTR3, [0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D])
+        sendData(CMD.INVCTR, [0x07])
+        sendData(CMD.PWCTR1, [0xA2, 0x02, 0x84])
+        sendData(CMD.PWCTR2, [0xC5])
+        sendData(CMD.PWCTR3, [0x0A, 0x00])
+        sendData(CMD.PWCTR4, [0x8A, 0x2A])
+        sendData(CMD.PWCTR5, [0x8A, 0xEE])
+        sendData(CMD.VMCTR1, [0x0E])
+        sendData(CMD.GMCTRP1, [0x0F, 0x1A, 0x0F, 0x18, 0x2F, 0x28, 0x20, 0x22, 0x1F, 0x1B, 0x23, 0x37, 0x00, 0x07, 0x02, 0x10])
+        sendData(CMD.GMCTRN1, [0x0F, 0x1B, 0x0F, 0x17, 0x33, 0x2C, 0x29, 0x2E, 0x30, 0x30, 0x39, 0x3F, 0x00, 0x07, 0x03, 0x10])
 
-        // optional: invert colors if washed
-        // send(0x21)
+        sendData(CMD.COLMOD, [0x05]) // RGB565
+        sendData(CMD.MADCTL, [0xA0 | (bgr ? 0x08 : 0x00)])
+        // TK89 panels may need INVON for black and white to display correctly.
+        send(inverted ? CMD.INVON : CMD.INVOFF)
+        send(CMD.NORON)
+        basic.pause(10)
 
         send(CMD.DISPON)
         basic.pause(100)
@@ -81,11 +116,14 @@ namespace TFT {
     export function fillRect(x: number, y: number, w: number, h: number, color: Color) {
         if (w <= 0 || h <= 0) return
 
-        let x1 = x + w - 1
-        let y1 = y + h - 1
+        let x1 = Math.min(TFTWIDTH - 1, x + w - 1)
+        let y1 = Math.min(TFTHEIGHT - 1, y + h - 1)
+        x = Math.max(0, x)
+        y = Math.max(0, y)
+        if (x > x1 || y > y1) return
 
-        clampWindow(x, y, x1, y1)
         setWindow(x, y, x1, y1)
+        let count = (x1 - x + 1) * (y1 - y + 1)
 
         let hi = color >> 8
         let lo = color & 0xFF
@@ -93,7 +131,7 @@ namespace TFT {
         pins.digitalWritePin(DC_PIN, 1)
         pins.digitalWritePin(CS_PIN, 0)
 
-        for (let i = 0; i < w * h; i++) {
+        for (let i = 0; i < count; i++) {
             pins.spiWrite(hi)
             pins.spiWrite(lo)
         }
@@ -154,17 +192,6 @@ namespace TFT {
 
     // ==== LOW LEVEL ====
 
-    function clamp(v: number, min: number, max: number) {
-        return Math.max(min, Math.min(max, v))
-    }
-
-    function clampWindow(x0: number, y0: number, x1: number, y1: number) {
-        x0 = clamp(x0, 0, TFTWIDTH - 1)
-        x1 = clamp(x1, 0, TFTWIDTH - 1)
-        y0 = clamp(y0, 0, TFTHEIGHT - 1)
-        y1 = clamp(y1, 0, TFTHEIGHT - 1)
-    }
-
     function setWindow(x0: number, y0: number, x1: number, y1: number) {
         x0 += X_OFFSET
         x1 += X_OFFSET
@@ -179,11 +206,10 @@ namespace TFT {
     function writeColor(color: number) {
         pins.digitalWritePin(DC_PIN, 1)
         pins.digitalWritePin(CS_PIN, 0)
-    
-        // FIX RGB565 byte order
-        pins.spiWrite(color & 0xFF)
+
         pins.spiWrite(color >> 8)
-    
+        pins.spiWrite(color & 0xFF)
+
         pins.digitalWritePin(CS_PIN, 1)
     }
 

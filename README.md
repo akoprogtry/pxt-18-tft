@@ -1,39 +1,131 @@
-Primarily configured for the Wavershare 1.8 inch TFT module https://www.waveshare.com/1.8inch-lcd-for-micro-bit.htm for Microbit the code in this extension is usable with other ST735S 1.8 TFT displays. 
-The extension contains functions to initialize and create various geometric shapes on the display.
+# micro:bit + Wukong + Lonely Binary TK89
 
-During the creation of this extension I used the extension at https://github.com/joy-it/pxt-RB-TFT1.8 for guidance and included a trimmed version of their string drawing routine. I also drew inspiration from the methods in this example https://simple-circuit.com/st7735-tft-vertical-scrolling-ccs-c/ and included the scrolling method in the extension.
+Расширение MakeCode для дисплея **Lonely Binary TK89**, контроллер ST7735S,
+160 × 128 пикселей в горизонтальном положении, цвета RGB565.
+Форк [Jeff-Squared/pxt-18-tft](https://github.com/Jeff-Squared/pxt-18-tft),
+адаптированный для подключения проводами к Wukong для micro:bit (EF08207).
 
+## Подключение
 
-![PinOut](https://user-images.githubusercontent.com/109444537/179872683-45711eca-ee2a-43a0-88fa-b1a0edc7cab0.png)
+Соединяйте при выключенном питании. Ниже приведены надписи именно на TK89;
+на лицевой и обратной сторонах некоторые названия отличаются.
 
+| Надпись на TK89 | Контакт на Wukong | Назначение |
+| --- | --- | --- |
+| **GND** | **G / GND** | Общая земля |
+| **3V3** | питание **3V / 3.3V** | Питание дисплея |
+| **CS** | **S** порта **P0** | Выбор дисплея |
+| **MO**, сзади **MOSI** | **S** порта **P15** | Данные SPI |
+| **SCL** | **S** порта **P13** | Тактовый сигнал SPI |
+| **DC** | **S** порта **P1** | Данные / команда |
+| **RST** | **S** порта **P8** | Сброс |
+| **BL**, сзади **BACKLIGHT** | питание **3V / 3.3V** | Постоянно включённая подсветка |
 
-> Open this page at [https://jeff-squared.github.io/pxt-18-tft/](https://jeff-squared.github.io/pxt-18-tft/)
+**3V3 и BL подключаются к одной линии 3,3 В. Не подключайте их к 5V**:
+у TK89 нет стабилизатора или преобразователей уровней. Если на Wukong нет
+однозначно подписанного выхода 3V/3V3, используйте контакт **3V micro:bit**;
+не выбирайте неизвестный контакт V наугад. Разъёмы 5V и питание сервоприводов
+для TK89 не подходят.
 
-## Use as Extension
+В тройном разъёме Wukong **G–V–S** сигнал берётся с **S**, земля с **G**.
+Обозначение P0 означает порт micro:bit, а не разъём сервопривода S0.
+**Выключите зуммер Wukong его переключателем**: он подключён к P0, который
+здесь используется как CS. Не запускайте музыку на P0 одновременно с дисплеем.
 
-This repository can be added as an **extension** in MakeCode.
+`SCL` на TK89 — это **SPI**, поэтому он идёт на P13, а не на SCL разъёма I²C.
+Провод MISO не нужен; P14 физически остаётся неподключённым.
+Отдельное расширение Wukong для управления этим экраном не требуется.
 
-* open [https://makecode.microbit.org/](https://makecode.microbit.org/)
-* click on **New Project**
-* click on **Extensions** under the gearwheel menu
-* search for **https://github.com/jeff-squared/pxt-18-tft** and import
+Распиновки производителей:
+[TK89](https://learn.lonelybinary.com/tinkerblock/blocks/tft-1-8-inch/the-eight-pins),
+[Wukong](https://wiki.elecfreaks.com/en/microbit/expansion-board/wukong/).
 
-## Edit this project ![Build status badge](https://github.com/jeff-squared/pxt-18-tft/workflows/MakeCode/badge.svg)
+## Запуск в MakeCode
 
-To edit this repository in MakeCode.
+1. Опубликуйте нужный коммит этого форка в GitHub: локальный коммит сам по себе
+   не обновляет код, скачиваемый MakeCode.
+2. Создайте проект на [makecode.microbit.org](https://makecode.microbit.org/).
+3. Через **Extensions** добавьте `https://github.com/akoprogtry/pxt-18-tft`.
+   Если уже установлен оригинал Jeff-Squared, замените его этим форком.
+4. Переключитесь в JavaScript и скопируйте содержимое [test.ts](test.ts)
+   в `main.ts` вашего тестового проекта.
+5. Скачайте программу на micro:bit, установленный в Wukong, и включите питание.
 
-* open [https://makecode.microbit.org/](https://makecode.microbit.org/)
-* click on **Import** then click on **Import URL**
-* paste **https://github.com/jeff-squared/pxt-18-tft** and click import
+Симулятор MakeCode не показывает внешний TFT. Для проверки нужен настоящий экран.
 
-## Blocks preview
+## Проверка цветов
 
-This image shows the blocks code from the last commit in master.
-This image may take a few minutes to refresh.
+Тест рисует сверху восемь полос слева направо:
+**чёрная, белая, красная, зелёная, синяя, голубая, пурпурная, жёлтая**.
+Снизу — контуры и окружности тех же цветов; первая чёрная фигура сливается
+с чёрным фоном. Цвет каждой нижней фигуры должен совпадать с полосой над ней.
+Белая рамка толщиной один пиксель должна быть видна по всем четырём краям.
 
-![A rendered view of the blocks](https://github.com/jeff-squared/pxt-18-tft/raw/master/.github/makecode/blocks.png)
+- **Кнопка A** переключает инверсию. Используйте её, если чёрный выглядит белым,
+  а остальные цвета похожи на негатив.
+- **Кнопка B** переключает RGB/BGR. Используйте её, если красный и синий
+  поменялись местами, а чёрный и белый уже правильные.
+- После нажатия дождитесь завершения перерисовки. В USB serial выводятся
+  `inverted` и `bgr`: 1 означает `true`, 0 означает `false`.
 
-#### Metadata (used for search, rendering)
+Начальное состояние после включения: `inverted=true`, `bgr=false`.
+Подобранные кнопками значения действуют до перезапуска. Перенесите их в вызов
+`TFT.init(inverted, bgr)` своего проекта, чтобы сохранить настройку.
+
+Для TK89 с белым вместо чёрного производитель рекомендует попробовать включить
+[инверсию](https://learn.lonelybinary.com/tinkerblock/blocks/tft-1-8-inch/when-the-screen-is-wrong).
+Поэтому `TFT.init()` включает её по умолчанию. Выбор зависит от экземпляра панели;
+настройка ещё требует проверки на вашем оборудовании.
+
+Если рамка обрезана или изображение смещено, нужны другие `X_OFFSET`/`Y_OFFSET`
+в начале библиотеки. Сейчас оба равны нулю; смещения Waveshare не переносятся
+на TK89 автоматически.
+
+## API
+
+```typescript
+TFT.init(true, false) // инверсия включена, порядок RGB
+TFT.clear(TFT.Color.Black)
+TFT.pixel(10, 10, TFT.Color.Red)
+TFT.fillRect(20, 20, 40, 30, TFT.Color.Green)
+TFT.line(0, 0, 159, 127, TFT.Color.Blue)
+TFT.circle(80, 64, 20, TFT.Color.Yellow)
+```
+
+Координаты целочисленные: X от 0 до 159, Y от 0 до 127.
+Прямоугольники обрезаются по границам экрана, пиксели снаружи пропускаются.
+Цвета доступны как `TFT.Color.*`.
+Старые имена `clearScreen`, `drawPixel`, `drawRectangle` и глобальный `Color`
+в этом форке заменены; отрисовка текста и прокрутка отсутствуют.
+
+Восстановлена настройка кадров, питания и гаммы из исходного драйвера,
+добавлен явный выбор SPI P15/P14/P13, 4 МГц, режим 0.
+Пиксели и заливки передают RGB565 одинаково: старший байт, затем младший.
+
+## Проверки без экрана
+
+Нужны Node.js и TypeScript. Если TypeScript уже доступен через `require`:
+
+```sh
+node tests/driver.test.js
+```
+
+Или укажите путь к установленному компилятору:
+
+```sh
+node tests/driver.test.js /path/to/typescript/lib/typescript.js
+```
+
+Тест проверяет типы библиотеки и примера, SPI-байты цветов, обрезку прямоугольников,
+инициализацию и работу кнопок примера. Он выполняет настоящий код драйвера
+с заменой аппаратных функций. Это не сборка прошивки MakeCode и не проверка
+физических цветов, питания, ориентации или смещений панели.
+
+## Авторство
+
+Исходный проект: [Jeff-Squared/pxt-18-tft](https://github.com/Jeff-Squared/pxt-18-tft).
+Исходный автор также использовал
+[joy-it/pxt-RB-TFT1.8](https://github.com/joy-it/pxt-RB-TFT1.8)
+и [пример прокрутки ST7735](https://simple-circuit.com/st7735-tft-vertical-scrolling-ccs-c/).
 
 * for PXT/microbit
-<script src="https://makecode.com/gh-pages-embed.js"></script><script>makeCodeRender("{{ site.makecode.home_url }}", "{{ site.github.owner_name }}/{{ site.github.repository_name }}");</script>

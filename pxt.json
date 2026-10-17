@@ -1,6 +1,6 @@
 {
     "name": "1.8 TFT",
-    "description": "",
+    "description": "160x128 ST7735S TFT driver for micro:bit, Wukong and Lonely Binary TK89",
     "dependencies": {
         "core": "*",
         "radio": "*",
