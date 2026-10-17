@@ -104,6 +104,13 @@ namespace TFT {
         fillRect(0, 0, TFTWIDTH, TFTHEIGHT, color)
     }
 
+    //% block="clear %color and measure ms"
+    export function measureClear(color: Color): number {
+        let start = input.runningTime()
+        clear(color)
+        return input.runningTime() - start
+    }
+
     //% block="pixel x %x y %y color %color"
     export function pixel(x: number, y: number, color: Color) {
         if (x < 0 || y < 0 || x >= TFTWIDTH || y >= TFTHEIGHT) return
@@ -125,8 +132,8 @@ namespace TFT {
         setWindow(x, y, x1, y1)
         let count = (x1 - x + 1) * (y1 - y + 1)
 
-        // Reuse a small chunk instead of calling into SPI once for every byte.
-        let chunkPixels = Math.min(count, 256)
+        // V2 yields on each SPI transfer; larger chunks reduce scheduler overhead.
+        let chunkPixels = Math.min(count, 2048)
         let data = pins.createBuffer(chunkPixels * 2)
         for (let i = 0; i < data.length; i += 2) {
             data[i] = color >> 8
@@ -220,11 +227,13 @@ namespace TFT {
     }
 
     function writeColor(color: number) {
+        let data = pins.createBuffer(2)
+        data[0] = color >> 8
+        data[1] = color & 0xFF
         pins.digitalWritePin(DC_PIN, 1)
         pins.digitalWritePin(CS_PIN, 0)
 
-        pins.spiWrite(color >> 8)
-        pins.spiWrite(color & 0xFF)
+        pins.spiTransfer(data, null)
 
         pins.digitalWritePin(CS_PIN, 1)
     }
@@ -237,13 +246,15 @@ namespace TFT {
     }
 
     function sendData(cmd: number, data: number[]) {
+        let buffer = pins.createBuffer(data.length)
+        for (let i = 0; i < data.length; i++) {
+            buffer[i] = data[i]
+        }
         send(cmd)
         pins.digitalWritePin(DC_PIN, 1)
         pins.digitalWritePin(CS_PIN, 0)
 
-        for (let d of data) {
-            pins.spiWrite(d)
-        }
+        pins.spiTransfer(buffer, null)
 
         pins.digitalWritePin(CS_PIN, 1)
     }

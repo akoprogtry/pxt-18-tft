@@ -28,7 +28,10 @@ declare namespace basic {
     function pause(ms: number): void;
     function forever(callback: () => void): void;
 }
-declare namespace input { function onButtonPressed(button: Button, callback: () => void): void; }
+declare namespace input {
+    function onButtonPressed(button: Button, callback: () => void): void;
+    function runningTime(): number;
+}
 declare namespace serial { function writeValue(name: string, value: number): void; }
 `;
 
@@ -65,7 +68,7 @@ const context = vm.createContext({
             assert.equal(response, null);
             assert.equal(pinLevels.get(0), 0);
             assert.equal(pinLevels.get(1), 1);
-            assert(command.length <= 512, 'fill buffer stays small enough for micro:bit V1');
+            assert(command.length <= 4096, 'transfers do not allocate a full-screen buffer');
             packets[packets.length - 1].data.push(...command);
         },
         spiWrite: value => {
@@ -78,7 +81,10 @@ const context = vm.createContext({
         }
     },
     basic: { pause() {}, forever(callback) { tick = callback; } },
-    input: { onButtonPressed: (button, callback) => buttons.set(button, callback) },
+    input: {
+        onButtonPressed: (button, callback) => buttons.set(button, callback),
+        runningTime: () => calls.single + calls.bulk
+    },
     serial: { writeValue: (name, value) => { values[name] = value; } }
 });
 function run(text) {
@@ -117,10 +123,17 @@ assert.equal(capture('TFT.pixel(-1, 0, TFT.Color.Red); TFT.pixel(160, 128, TFT.C
 capture('TFT.clear(TFT.Color.Black)');
 assert.equal(lastData(0x2c).length, 160 * 128 * 2);
 console.log(`Full clear: ${calls.single} single-byte calls, ${calls.bulk} buffer transfers`);
-assert(calls.single <= 11 && calls.bulk <= 80, 'full clear must batch pixel bytes');
-capture('TFT.fillRect(0, 0, 129, 3, TFT.Color.Red)');
-assert.deepEqual(lastData(0x2c), Array(129 * 3).fill([0xf8, 0]).flat(), 'partial final chunk has exactly the remaining pixels');
-assert.equal(calls.bulk, 2);
+assert(calls.single <= 3 && calls.bulk <= 12, 'batch address data as well as larger pixel chunks');
+capture('TFT.fillRect(0, 0, 129, 17, TFT.Color.Red)');
+assert.deepEqual(lastData(0x2c), Array(129 * 17).fill([0xf8, 0]).flat(), 'partial final chunk has exactly the remaining pixels');
+assert.equal(calls.bulk, 4);
+capture('TFT.pixel(0, 0, TFT.Color.Red)');
+assert.deepEqual(lastData(0x2c), [0xf8, 0]);
+assert.equal(calls.single, 3, 'pixel commands use three single-byte calls');
+assert.equal(calls.bulk, 3, 'coordinates and pixel color use buffer transfers');
+capture('var measuredClear = TFT.measureClear(TFT.Color.Blue)');
+assert.equal(context.measuredClear, calls.single + calls.bulk, 'measure only the time spent in clear');
+assert.deepEqual(lastData(0x2c), Array(160 * 128).fill([0, 0x1f]).flat());
 capture('TFT.line(10, 5, -3, 5, TFT.Color.Green)');
 assert.deepEqual(lastData(0x2a), [0, 0, 0, 10]);
 assert.deepEqual(lastData(0x2b), [0, 5, 0, 5]);
