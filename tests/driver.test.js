@@ -8,7 +8,7 @@ const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'main.ts'), 'utf8');
 const demo = fs.readFileSync(path.join(root, 'test.ts'), 'utf8');
 const declarations = `
-declare enum DigitalPin { P0, P1, P8, P13, P14, P15 }
+declare enum DigitalPin { P0, P1, P2, P8, P13, P14, P15 }
 declare enum Button { A, B }
 interface Buffer {
     [index: number]: number;
@@ -49,31 +49,36 @@ const diagnostics = ts.getPreEmitDiagnostics(program);
 
 const packets = [];
 const pinLevels = new Map();
+const pinWrites = [];
+let displayCs = 0;
 const spiSetup = {};
 const buttons = new Map();
 const values = {};
 const calls = { single: 0, bulk: 0 };
 let tick;
 const context = vm.createContext({
-    DigitalPin: { P0: 0, P1: 1, P8: 8, P13: 13, P14: 14, P15: 15 },
+    DigitalPin: { P0: 0, P1: 1, P2: 2, P8: 8, P13: 13, P14: 14, P15: 15 },
     Button: { A: 0, B: 1 },
     pins: {
         spiPins: (...args) => { spiSetup.pins = args; },
         spiFrequency: hz => { spiSetup.hz = hz; },
         spiFormat: (...args) => { spiSetup.format = args; },
-        digitalWritePin: (pin, value) => pinLevels.set(pin, value),
+        digitalWritePin: (pin, value) => {
+            pinWrites.push([pin, value]);
+            pinLevels.set(pin, value);
+        },
         createBuffer: size => Buffer.alloc(size),
         spiTransfer: (command, response) => {
             calls.bulk++;
             assert.equal(response, null);
-            assert.equal(pinLevels.get(0), 0);
+            assert.equal(pinLevels.get(displayCs), 0);
             assert.equal(pinLevels.get(1), 1);
             assert(command.length <= 4096, 'transfers do not allocate a full-screen buffer');
             packets[packets.length - 1].data.push(...command);
         },
         spiWrite: value => {
             calls.single++;
-            assert.equal(pinLevels.get(0), 0, 'SPI writes must select the display');
+            assert.equal(pinLevels.get(displayCs), 0, 'SPI writes must select the display');
             assert(value >= 0 && value <= 255 && Number.isInteger(value), 'SPI accepts bytes');
             if (pinLevels.get(1) === 0) packets.push({ command: value, data: [] });
             else packets[packets.length - 1].data.push(value);
@@ -92,6 +97,7 @@ function run(text) {
 }
 function capture(text) {
     packets.length = 0;
+    pinWrites.length = 0;
     calls.single = 0;
     calls.bulk = 0;
     run(text);
@@ -159,6 +165,13 @@ capture('TFT.init(false, true)');
 assert(packets.some(p => p.command === 0x20));
 assert(!packets.some(p => p.command === 0x21));
 assert.deepEqual(lastData(0x36), [0xa8]);
+displayCs = 2;
+capture('TFT.init(true, false, DigitalPin.P2); TFT.clear(TFT.Color.Red); TFT.pixel(0, 0, TFT.Color.Blue)');
+assert(pinWrites.some(([pin]) => pin === 2), 'custom CS uses P2');
+assert(pinWrites.every(([pin]) => pin !== 0), 'drawing on P2 never drives the P0 buzzer');
+assert.equal(pinLevels.get(2), 1, 'custom CS is deselected after drawing');
+assert.deepEqual(lastData(0x2c), [0, 0x1f]);
+displayCs = 0;
 
 assert.equal(diagnostics.length, 0, diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n'));
 run(demo);

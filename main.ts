@@ -52,9 +52,11 @@ namespace TFT {
         Magenta = 0xF81F
     }
 
-    //% block="init TFT inverted %inverted BGR %bgr"
+    //% block="init TFT inverted %inverted BGR %bgr CS %cs"
     //% inverted.defl=true bgr.defl=false
-    export function init(inverted: boolean = true, bgr: boolean = false): void {
+    //% cs.defl=DigitalPin.P0
+    export function init(inverted: boolean = true, bgr: boolean = false, cs: DigitalPin = DigitalPin.P0): void {
+        CS_PIN = cs
         pins.digitalWritePin(CS_PIN, 1)
         pins.digitalWritePin(DC_PIN, 1)
         pins.spiPins(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13)
