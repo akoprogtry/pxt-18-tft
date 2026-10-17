@@ -125,15 +125,23 @@ namespace TFT {
         setWindow(x, y, x1, y1)
         let count = (x1 - x + 1) * (y1 - y + 1)
 
-        let hi = color >> 8
-        let lo = color & 0xFF
+        // Reuse a small chunk instead of calling into SPI once for every byte.
+        let chunkPixels = Math.min(count, 256)
+        let data = pins.createBuffer(chunkPixels * 2)
+        for (let i = 0; i < data.length; i += 2) {
+            data[i] = color >> 8
+            data[i + 1] = color & 0xFF
+        }
 
         pins.digitalWritePin(DC_PIN, 1)
         pins.digitalWritePin(CS_PIN, 0)
 
-        for (let i = 0; i < count; i++) {
-            pins.spiWrite(hi)
-            pins.spiWrite(lo)
+        while (count >= chunkPixels) {
+            pins.spiTransfer(data, null)
+            count -= chunkPixels
+        }
+        if (count > 0) {
+            pins.spiTransfer(data.slice(0, count * 2), null)
         }
 
         pins.digitalWritePin(CS_PIN, 1)
@@ -142,6 +150,14 @@ namespace TFT {
     // Bresenham line (fast)
     //% block="line x0 %x0 y0 %y0 x1 %x1 y1 %y1 color %color"
     export function line(x0: number, y0: number, x1: number, y1: number, color: Color) {
+        if (y0 == y1) {
+            fillRect(Math.min(x0, x1), y0, Math.abs(x1 - x0) + 1, 1, color)
+            return
+        }
+        if (x0 == x1) {
+            fillRect(x0, Math.min(y0, y1), 1, Math.abs(y1 - y0) + 1, color)
+            return
+        }
         let dx = Math.abs(x1 - x0)
         let dy = -Math.abs(y1 - y0)
         let sx = x0 < x1 ? 1 : -1

@@ -10,12 +10,19 @@ const demo = fs.readFileSync(path.join(root, 'test.ts'), 'utf8');
 const declarations = `
 declare enum DigitalPin { P0, P1, P8, P13, P14, P15 }
 declare enum Button { A, B }
+interface Buffer {
+    [index: number]: number;
+    length: number;
+    slice(start: number, end?: number): Buffer;
+}
 declare namespace pins {
     function spiPins(mosi: DigitalPin, miso: DigitalPin, sck: DigitalPin): void;
     function spiFrequency(hz: number): void;
     function spiFormat(bits: number, mode: number): void;
     function digitalWritePin(pin: DigitalPin, value: number): void;
     function spiWrite(value: number): number;
+    function createBuffer(size: number): Buffer;
+    function spiTransfer(command: Buffer, response: Buffer | null): void;
 }
 declare namespace basic {
     function pause(ms: number): void;
@@ -42,6 +49,7 @@ const pinLevels = new Map();
 const spiSetup = {};
 const buttons = new Map();
 const values = {};
+const calls = { single: 0, bulk: 0 };
 let tick;
 const context = vm.createContext({
     DigitalPin: { P0: 0, P1: 1, P8: 8, P13: 13, P14: 14, P15: 15 },
@@ -51,7 +59,17 @@ const context = vm.createContext({
         spiFrequency: hz => { spiSetup.hz = hz; },
         spiFormat: (...args) => { spiSetup.format = args; },
         digitalWritePin: (pin, value) => pinLevels.set(pin, value),
+        createBuffer: size => Buffer.alloc(size),
+        spiTransfer: (command, response) => {
+            calls.bulk++;
+            assert.equal(response, null);
+            assert.equal(pinLevels.get(0), 0);
+            assert.equal(pinLevels.get(1), 1);
+            assert(command.length <= 512, 'fill buffer stays small enough for micro:bit V1');
+            packets[packets.length - 1].data.push(...command);
+        },
         spiWrite: value => {
+            calls.single++;
             assert.equal(pinLevels.get(0), 0, 'SPI writes must select the display');
             assert(value >= 0 && value <= 255 && Number.isInteger(value), 'SPI accepts bytes');
             if (pinLevels.get(1) === 0) packets.push({ command: value, data: [] });
@@ -68,6 +86,8 @@ function run(text) {
 }
 function capture(text) {
     packets.length = 0;
+    calls.single = 0;
+    calls.bulk = 0;
     run(text);
     return packets;
 }
@@ -96,6 +116,24 @@ assert.equal(capture('TFT.fillRect(160, 0, 2, 2, TFT.Color.Red); TFT.fillRect(-5
 assert.equal(capture('TFT.pixel(-1, 0, TFT.Color.Red); TFT.pixel(160, 128, TFT.Color.Red)').length, 0);
 capture('TFT.clear(TFT.Color.Black)');
 assert.equal(lastData(0x2c).length, 160 * 128 * 2);
+console.log(`Full clear: ${calls.single} single-byte calls, ${calls.bulk} buffer transfers`);
+assert(calls.single <= 11 && calls.bulk <= 80, 'full clear must batch pixel bytes');
+capture('TFT.fillRect(0, 0, 129, 3, TFT.Color.Red)');
+assert.deepEqual(lastData(0x2c), Array(129 * 3).fill([0xf8, 0]).flat(), 'partial final chunk has exactly the remaining pixels');
+assert.equal(calls.bulk, 2);
+capture('TFT.line(10, 5, -3, 5, TFT.Color.Green)');
+assert.deepEqual(lastData(0x2a), [0, 0, 0, 10]);
+assert.deepEqual(lastData(0x2b), [0, 5, 0, 5]);
+assert.deepEqual(lastData(0x2c), Array(11).fill([0x07, 0xe0]).flat());
+assert.equal(packets.filter(p => p.command === 0x2c).length, 1);
+capture('TFT.line(5, 140, 5, 120, TFT.Color.Blue)');
+assert.deepEqual(lastData(0x2a), [0, 5, 0, 5]);
+assert.deepEqual(lastData(0x2b), [0, 120, 0, 127]);
+assert.deepEqual(lastData(0x2c), Array(8).fill([0, 0x1f]).flat());
+capture('TFT.line(3, 4, 3, 4, TFT.Color.Red)');
+assert.deepEqual(lastData(0x2c), [0xf8, 0]);
+capture('TFT.line(0, 0, 2, 2, TFT.Color.Red)');
+assert.equal(packets.filter(p => p.command === 0x2c).length, 3, 'diagonal lines still draw each pixel');
 capture('TFT.init()');
 assert.deepEqual(spiSetup, { pins: [15, 14, 13], hz: 4000000, format: [8, 0] });
 assert(packets.some(p => p.command === 0x21), 'TK89 defaults to inversion on');
@@ -123,4 +161,4 @@ buttons.get(1)();
 tick();
 assert.deepEqual(lastData(0x36), [0xa8], 'button B switches RGB to BGR');
 assert.equal(values.bgr, 1);
-console.log('PASS: TypeScript, RGB565, clipping, initialization and hardware demo buttons');
+console.log('PASS: TypeScript, RGB565, clipping, batching, lines, initialization and hardware demo buttons');
