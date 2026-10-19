@@ -1,19 +1,17 @@
 // TFT driver for micro:bit + Wukong + Lonely Binary TK89 (ST7735S).
 
-//% weight=100 color=#0fbc11 icon="\uf26c"
+//% weight=100 color="#0fbc11" icon="\uf26c"
 namespace TFT {
-
     const TFTWIDTH = 160
     const TFTHEIGHT = 128
 
-    // ==== CONFIGURE YOUR PINS HERE ====
     let CS_PIN = DigitalPin.P0
-    let DC_PIN = DigitalPin.P1
-    let RST_PIN = DigitalPin.P8
+    const DC_PIN = DigitalPin.P1
+    const RST_PIN = DigitalPin.P8
 
-    // ==== OPTIONAL OFFSETS (fix shifted image) ====
-    let X_OFFSET = 0
-    let Y_OFFSET = 0
+    // Panel offsets; TK89 uses the full window from (0, 0).
+    const X_OFFSET = 0
+    const Y_OFFSET = 0
 
     enum CMD {
         SWRESET = 0x01,
@@ -106,15 +104,8 @@ namespace TFT {
         fillRect(0, 0, TFTWIDTH, TFTHEIGHT, color)
     }
 
-    //% block="clear %color and measure ms"
-    export function measureClear(color: Color): number {
-        let start = input.runningTime()
-        clear(color)
-        return input.runningTime() - start
-    }
-
     //% block="pixel x %x y %y color %color"
-    export function pixel(x: number, y: number, color: Color) {
+    export function pixel(x: number, y: number, color: Color): void {
         if (x < 0 || y < 0 || x >= TFTWIDTH || y >= TFTHEIGHT) return
 
         setWindow(x, y, x, y)
@@ -122,7 +113,7 @@ namespace TFT {
     }
 
     //% block="rect x %x y %y w %w h %h color %color"
-    export function fillRect(x: number, y: number, w: number, h: number, color: Color) {
+    export function fillRect(x: number, y: number, w: number, h: number, color: Color): void {
         if (w <= 0 || h <= 0) return
 
         let x1 = Math.min(TFTWIDTH - 1, x + w - 1)
@@ -156,9 +147,8 @@ namespace TFT {
         pins.digitalWritePin(CS_PIN, 1)
     }
 
-    // Bresenham line (fast)
     //% block="line x0 %x0 y0 %y0 x1 %x1 y1 %y1 color %color"
-    export function line(x0: number, y0: number, x1: number, y1: number, color: Color) {
+    export function line(x0: number, y0: number, x1: number, y1: number, color: Color): void {
         if (y0 == y1) {
             fillRect(Math.min(x0, x1), y0, Math.abs(x1 - x0) + 1, 1, color)
             return
@@ -188,9 +178,8 @@ namespace TFT {
         }
     }
 
-    // fast circle (midpoint)
     //% block="circle x %x y %y r %r color %color"
-    export function circle(x0: number, y0: number, r: number, color: Color) {
+    export function circle(x0: number, y0: number, r: number, color: Color): void {
         let x = r
         let y = 0
         let err = 0
@@ -215,9 +204,7 @@ namespace TFT {
         }
     }
 
-    // ==== LOW LEVEL ====
-
-    function setWindow(x0: number, y0: number, x1: number, y1: number) {
+    function setWindow(x0: number, y0: number, x1: number, y1: number): void {
         x0 += X_OFFSET
         x1 += X_OFFSET
         y0 += Y_OFFSET
@@ -228,7 +215,7 @@ namespace TFT {
         send(CMD.RAMWR)
     }
 
-    function writeColor(color: number) {
+    function writeColor(color: number): void {
         let data = pins.createBuffer(2)
         data[0] = color >> 8
         data[1] = color & 0xFF
@@ -240,14 +227,14 @@ namespace TFT {
         pins.digitalWritePin(CS_PIN, 1)
     }
 
-    function send(cmd: number) {
+    function send(cmd: number): void {
         pins.digitalWritePin(DC_PIN, 0)
         pins.digitalWritePin(CS_PIN, 0)
         pins.spiWrite(cmd)
         pins.digitalWritePin(CS_PIN, 1)
     }
 
-    function sendData(cmd: number, data: number[]) {
+    function sendData(cmd: number, data: number[]): void {
         let buffer = pins.createBuffer(data.length)
         for (let i = 0; i < data.length; i++) {
             buffer[i] = data[i]

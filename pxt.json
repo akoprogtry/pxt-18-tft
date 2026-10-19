@@ -1,10 +1,11 @@
 {
-    "name": "1.8 TFT",
+    "name": "pxt-18-tft",
+    "version": "1.0.0",
     "description": "160x128 ST7735S TFT driver for micro:bit, Wukong and Lonely Binary TK89",
+    "license": "MIT",
+    "public": true,
     "dependencies": {
-        "core": "*",
-        "radio": "*",
-        "microphone": "*"
+        "core": "*"
     },
     "files": [
         "main.ts",
@@ -13,14 +14,8 @@
     "testFiles": [
         "test.ts"
     ],
-    "targetVersions": {
-        "target": "5.0.12",
-        "pxt": "8.0.7",
-        "targetId": "microbit"
-    },
     "supportedTargets": [
         "microbit"
     ],
-    "preferredEditor": "tsprj",
-    "languageRestriction": "javascript-only"
+    "preferredEditor": "tsprj"
 }

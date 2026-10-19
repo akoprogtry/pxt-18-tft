@@ -1,9 +1,10 @@
 let inverted = true
 let bgr = false
 let redraw = true
+const chipSelect = DigitalPin.P2
 
 function drawTest(invertColors: boolean, useBgr: boolean) {
-    TFT.init(invertColors, useBgr)
+    TFT.init(invertColors, useBgr, chipSelect)
     TFT.clear(TFT.Color.Black)
     let colors = [TFT.Color.Black, TFT.Color.White, TFT.Color.Red, TFT.Color.Green,
         TFT.Color.Blue, TFT.Color.Cyan, TFT.Color.Magenta, TFT.Color.Yellow]

@@ -30,7 +30,6 @@ declare namespace basic {
 }
 declare namespace input {
     function onButtonPressed(button: Button, callback: () => void): void;
-    function runningTime(): number;
 }
 declare namespace serial { function writeValue(name: string, value: number): void; }
 `;
@@ -87,8 +86,7 @@ const context = vm.createContext({
     },
     basic: { pause() {}, forever(callback) { tick = callback; } },
     input: {
-        onButtonPressed: (button, callback) => buttons.set(button, callback),
-        runningTime: () => calls.single + calls.bulk
+        onButtonPressed: (button, callback) => buttons.set(button, callback)
     },
     serial: { writeValue: (name, value) => { values[name] = value; } }
 });
@@ -137,9 +135,6 @@ capture('TFT.pixel(0, 0, TFT.Color.Red)');
 assert.deepEqual(lastData(0x2c), [0xf8, 0]);
 assert.equal(calls.single, 3, 'pixel commands use three single-byte calls');
 assert.equal(calls.bulk, 3, 'coordinates and pixel color use buffer transfers');
-capture('var measuredClear = TFT.measureClear(TFT.Color.Blue)');
-assert.equal(context.measuredClear, calls.single + calls.bulk, 'measure only the time spent in clear');
-assert.deepEqual(lastData(0x2c), Array(160 * 128).fill([0, 0x1f]).flat());
 capture('TFT.line(10, 5, -3, 5, TFT.Color.Green)');
 assert.deepEqual(lastData(0x2a), [0, 0, 0, 10]);
 assert.deepEqual(lastData(0x2b), [0, 5, 0, 5]);
@@ -171,11 +166,12 @@ assert(pinWrites.some(([pin]) => pin === 2), 'custom CS uses P2');
 assert(pinWrites.every(([pin]) => pin !== 0), 'drawing on P2 never drives the P0 buzzer');
 assert.equal(pinLevels.get(2), 1, 'custom CS is deselected after drawing');
 assert.deepEqual(lastData(0x2c), [0, 0x1f]);
-displayCs = 0;
 
 assert.equal(diagnostics.length, 0, diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n'));
+pinWrites.length = 0;
 run(demo);
 tick();
+assert(pinWrites.every(([pin]) => pin !== 0), 'hardware demo avoids the P0 buzzer');
 assert.equal(values.inverted, 1);
 assert.equal(values.bgr, 0);
 buttons.get(0)();
